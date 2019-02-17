@@ -1,0 +1,126 @@
+---
+title: "Reproducible Research Project 1"
+author: "Brody Vogel"
+date: "2/17/2019"
+output: html_document
+---
+
+# Loading and Preprocessing the Data
+
+```{r}
+library(tidyverse)
+
+activity <- read.csv('/Users/brodyvogel/Desktop/activity.csv')
+
+# there are a lot of NAs
+no_nas <- activity[complete.cases(activity), ]
+```
+
+# What is the Mean Total Number of Steps Taken Per Day?
+
+```{r}
+# aggregate the steps by date
+sums <- aggregate(activity$steps ~ activity$date, FUN = sum)
+# make the histogram
+hist(sums$`activity$steps`, breaks = 25, xlab = 'Daily Steps', main = 'Total Steps by Day')
+```
+
+The mean steps per day was 10,766. The median number of steps per day was one less, 10,765. 
+
+```{r}
+# calculate the mean and median
+mean(sums$`activity$steps`)
+median(sums$`activity$steps`)
+```
+
+# What is the Average Daily Activity Pattern?
+
+```{r}
+# aggregate the steps by interval and mean
+avg_by_interval <- aggregate(activity$steps ~ activity$interval, FUN = mean)
+# plot the time series
+plot(avg_by_interval$`activity$interval`, avg_by_interval$`activity$steps`, type = 'l',
+     xlab = 'Interval', ylab = 'Avg. Steps', main = 'Average Steps by Interval')
+```
+
+The largest number of average steps in a 5-minute interval was 206. The corresponding 5-minute interval was the 835 entry.
+
+```{r}
+# calculate the max average steps and the corresponding interval
+max_steps <- max(avg_by_interval$`activity$steps`)
+max_steps
+avg_by_interval[avg_by_interval$`activity$steps` == max_steps, 1]
+```
+
+# Imputing Missing Values
+
+The number of rows containing an NA is 2304.
+
+```{r}
+# get the number of rows with an NA in any column
+sum(is.na(activity$steps)) + sum(is.na(activity$date)) + sum(is.na(activity$interval))
+```
+
+My strategy is to fill in the missing values for steps with the average number of steps for that invterval from the rest of the data set.
+
+```{r}
+# get just the NA entries
+all_nas <- activity[is.na(activity$steps), ]
+# throw out the steps observation
+all_nas <- all_nas %>% select(c(date, interval))
+
+# so the merge works
+names(avg_by_interval) <- c('interval', 'steps')
+
+# create the interpolated data
+interpolated_nas <- merge(all_nas, avg_by_interval, by = 'interval')
+
+# merge the interpolated data with the clean data from before
+interpolated_data <- rbind(no_nas, interpolated_nas)
+
+# aggregate by date again
+agg_interpolated_data <- aggregate(interpolated_data$steps ~ interpolated_data$date, FUN = sum)
+
+hist(agg_interpolated_data$`interpolated_data$steps`, xlab = 'Steps', breaks = 25, main = 'Histogram of Steps with NAs Interpolated')
+```
+
+The mean stays exactly the same, 10,766; with all the interpolated data, now, though, the median goes up one to 10,766 too. 
+
+So the data changes a little when observations are interpolated. The distribution is unchanged, however. The effect, then, is that interpolating the missing observations brings more uniformity to the data; whether this is justified or not would depend on the situation. I think it's fine, here. 
+
+```{r}
+# calculate the mean and median
+mean(agg_interpolated_data$`interpolated_data$steps`)
+median(agg_interpolated_data$`interpolated_data$steps`)
+```
+
+# Are there Differences in Activity Patterns Between Weekdays and Weekends?
+
+The trend lines are quite different depending on whether the activity happends on a weekend or weekday. It looks like activity is more spread out on the weekends, potentially because people are not working in a confined space.
+
+```{r}
+# calculate the factor variable
+no_nas$day <- weekdays(as.Date(no_nas$date, '%Y-%m-%d'))
+no_nas$weekend_or_not <- ifelse(no_nas$day %in% c('Saturday', 'Sunday'), 'weekend', 'weekday')
+
+# create a grouped data frame with averages
+to_plot <- no_nas %>% group_by(weekend_or_not, interval) %>%
+  summarize(steps = mean(steps))
+
+# plot it
+ggplot(to_plot, aes(interval, steps, color = weekend_or_not)) +
+  theme_linedraw() + 
+  geom_line(size = 2) +
+  labs(title = 'Average Steps by Day and Interval', x = 'Interval', y = 'Steps', color = "Weekend or Weekday") +
+  facet_grid(~weekend_or_not) +
+  facet_wrap(~weekend_or_not, scales = 'free', nrow = 2)
+```
+
+
+
+
+
+
+
+
+
